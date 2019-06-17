@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 
 # cria base de dados
-sensors = {"sensor_1": 0, "sensor_2": 1, "sensor_3": 2}
+sensors = {"sensor_1": "b", "sensor_2": "r", "sensor_3": "g"}
 datas = []
 size = 10
 for i in range(len(sensors)):
@@ -15,33 +15,35 @@ for i in range(len(sensors)):
     datas.append(row)
 
 # processa linha de entrada
-def processData( row ):
+sensor_color = {"sensor_1": "b", "sensor_2": "r", "sensor_3": "g"}
+windows_size = 500
+def processData( row, j ):
     sensor, data = row.split(' ')
-    sensor_id = sensors[sensor]
-    datas[sensor_id].append(int(data))
-    datas[sensor_id].pop(0)
-    print("sensor_" + str(sensor_id) + ": " + str(datas[sensor_id]))
-    #plt.draw() 
-    #plt.pause(0.01)
+    if j >= windows_size:
+        plt.axis([j-windows_size, j, 0, 45])
+    plt.scatter(j, int(data), c=sensor_color[sensor], s=10)
+    plt.pause(0.001)
 
 # configura grafico
-tempo = np.arange(0, size, 1)
-fig, ax = plt.subplots()
-plt.xlim(0,10) 
-plt.ylim(0,10)
-#ax.plot(tempo, datas[0])
+plt.axis([0, windows_size, 0, 45])
+plt.scatter(-1, 0, c="b", s=10, label="sensor_1")
+plt.scatter(-1, 0, c="r", s=10, label="sensor_2")
+plt.scatter(-1, 0, c="g", s=10, label="sensor_3")
+plt.legend()
 
 # configura serial
 master = serial.Serial('COM3', 115200)
 
 # le serial
 line = ""
+j = 0
 while True:
     try:
         read = str(master.read()).split('\'')[1]
         if read == '\\r':
-            processData(line)
+            processData(line, j)
             line = ""
+            j += 1
             master.read() # remove o '\n'
         else:
             line = line + str(read)
