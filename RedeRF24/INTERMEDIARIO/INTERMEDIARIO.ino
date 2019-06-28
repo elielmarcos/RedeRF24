@@ -1,6 +1,5 @@
 #include <RF24.h>
 #include <SimpleTimer.h>
-#include "DHT.h"
 
 //*************** Controle do RF ***********************
 #define MASTER 00
@@ -11,16 +10,7 @@
 #define SENSOR2 22
 #define SENSOR3 23
 
-//*************** Configuracoes DHT ********************
-#define DHTPIN A0 // pino conectado no Arduino
-#define DHTTYPE DHT11 // DHT 11
- 
-// Conecte pino 1 do sensor (esquerda) ao +5V
-// Conecte pino 2 do sensor ao pino de dados definido em seu Arduino
-// Conecte pino 4 do sensor ao GND
-DHT dht(DHTPIN, DHTTYPE);
-
-#define radioID MASTER   //Informar o ID ou NOME do dispositivo
+#define radioID INTERMEDIARIO0   //Informar o ID ou NOME do dispositivo
 
 /*             T  A  B  L  E        P  I  P  E  S
  *  
@@ -94,16 +84,6 @@ bool EnviarPacote(PKG pacote);
 void EnviarPing(PKG pacote);
 void EnviarPong(PKG pacote);
 
-#if (radioID == MASTER)
-    #define CAMADAS 3           // Numero de camadas (3)
-    #define MAIOR_NODES 4       // Maior quantidade de nodes em qualquer camada (4 nodes na ultima camada)
-    int ativos[CAMADAS][MAIOR_NODES];   
-    SimpleTimer timer;
-    void MasterPing();
-    void AtivarNode(int ID);
-    bool NodeAtivo(int ID);
-#endif
-
 void setup() {
 
   Serial.begin(115200);           // Inicia comunicação serial
@@ -112,19 +92,7 @@ void setup() {
   radio.begin();                  // Inicia o RF
   radio.setPALevel(RF24_PA_HIGH); // Configura RF potência máxima 
   
-  #if (radioID == MASTER)     // MASTER
-      #define WRITE_INTERMEDIARIO0 radio.openWritingPipe(PIPE_B)
-      #define WRITE_INTERMEDIARIO1 radio.openWritingPipe(PIPE_D)
-      radio.openReadingPipe(1, PIPE_A);
-      radio.openReadingPipe(2, PIPE_C);
-      enderecoOrigem = MASTER;
-      for (int i = 0; i < CAMADAS; i++)         // para o numero de camadas
-        for (int j = 0; j < MAIOR_NODES; j++)   // para maior quantidade de nodes em qualquer camada
-          ativos[i][j] = 0;                     // inicializa nodes desativados
-      timer.setInterval(5000,MasterPing);       // tempo de intervalo para enviar o ping
-
-      
-  #elif (radioID == INTERMEDIARIO0)   // INTERMEDIARIO 0
+  #if (radioID == INTERMEDIARIO0)   // INTERMEDIARIO 0
       #define WRITE_MASTER  radio.openWritingPipe(PIPE_A)
       #define WRITE_SENSOR0 radio.openWritingPipe(PIPE_F)
       #define WRITE_SENSOR1 radio.openWritingPipe(PIPE_H)
@@ -142,31 +110,6 @@ void setup() {
       radio.openReadingPipe(2, PIPE_I);
       radio.openReadingPipe(3, PIPE_K);
       enderecoOrigem = INTERMEDIARIO1;
-
-      
-  #elif (radioID == SENSOR0)   // SENSOR 0
-      radio.openWritingPipe(PIPE_D);
-      radio.openReadingPipe(1, PIPE_F);
-      enderecoOrigem = SENSOR0;
-      dht.begin();
-      
-  #elif (radioID == SENSOR1)   // SENSOR 1
-      radio.openWritingPipe(PIPE_G);
-      radio.openReadingPipe(1, PIPE_H);
-      enderecoOrigem = SENSOR1;
-      dht.begin();
-      
-  #elif (radioID == SENSOR2)   // SENSOR 2
-      radio.openWritingPipe(PIPE_I);
-      radio.openReadingPipe(1, PIPE_J);
-      enderecoOrigem = SENSOR2;
-      dht.begin();
-      
-  #elif (radioID == SENSOR3)   // SENSOR 3
-      radio.openWritingPipe(PIPE_K);
-      radio.openReadingPipe(1, PIPE_L);
-      enderecoOrigem = SENSOR3;
-      dht.begin();
   #endif
 
 
@@ -181,82 +124,9 @@ void loop() {
   PKG receber;
 
   while (true) {
-    
-    /* SOURCE MASTER */ 
-    #if (radioID == MASTER)
-
-        timer.run(); // polling do SimpleTimer
-
-        //verifica se esta recebendo dado       
-        if (radio.available()) { 
-          receber = ReceberPacote();
-          String tipo = receber.tipo;
-          String dado = receber.dado;          
-          if (receber.enderecoDestino == enderecoOrigem) {
-            if (tipo == "PONG") {
-              AtivarNode(receber.enderecoOrigem); 
-              Serial.println("COMUNICACAO ABERTA COM NODE: "+receber.enderecoOrigem);
-            }
-            else 
-            if ((tipo == "SET") && NodeAtivo(receber.enderecoOrigem)) {
-              if (receber.enderecoOrigem == SENSOR0)
-                Serial.println("<SENSOR 0>: "+dado);
-              else 
-              if (receber.enderecoOrigem == SENSOR1)
-                Serial.println("<SENSOR 1>: "+dado);
-              else
-              if (receber.enderecoOrigem == SENSOR2)
-                Serial.println("<SENSOR 2>: "+dado);
-              else
-              if (receber.enderecoOrigem == SENSOR3)
-                Serial.println("<SENSOR 3>: "+dado);
-              else Serial.println("<ERRO>");
-            }else Serial.println("<ERRO>"); 
-          } else Serial.println("MENSAGEM PARA OUTRO NODE");
-        }
-
-        // Se I0 esta ativo, então se S0 esta ativo (solicita valor), então se S1 esta ativo (solicita valor) 
-        if (NodeAtivo(INTERMEDIARIO0)) {
-          WRITE_INTERMEDIARIO0;
-          if (NodeAtivo(SENSOR0)) {
-            enviar.enderecoOrigem = enderecoOrigem;
-            enviar.enderecoDestino = SENSOR0;
-            strcpy(enviar.tipo,"GET");
-            strcpy(enviar.dado,"");
-            EnviarPacote(enviar); 
-          }
-          if (NodeAtivo(SENSOR1)) {
-            enviar.enderecoOrigem = enderecoOrigem;
-            enviar.enderecoDestino = SENSOR1;
-            strcpy(enviar.tipo,"GET");
-            strcpy(enviar.dado,"");
-            EnviarPacote(enviar); 
-          }
-        }
-
-        // Se I1 esta ativo, então se S2 esta ativo (solicita valor), então se S3 esta ativo (solicita valor)
-        //Serial.println("IO: " + String(NodeAtivo(INTERMEDIARIO1)));
-        if (NodeAtivo(INTERMEDIARIO1)) {
-          WRITE_INTERMEDIARIO1;
-          if (NodeAtivo(SENSOR2)) {
-            enviar.enderecoOrigem = enderecoOrigem;
-            enviar.enderecoDestino = SENSOR2;
-            strcpy(enviar.tipo,"GET");
-            strcpy(enviar.dado,"");
-            EnviarPacote(enviar); 
-          }
-          if (NodeAtivo(SENSOR3)) {
-            enviar.enderecoOrigem = enderecoOrigem;
-            enviar.enderecoDestino = SENSOR3;
-            strcpy(enviar.tipo,"GET");
-            strcpy(enviar.dado,"");
-            EnviarPacote(enviar); 
-          }  
-        } 
-  
-    
+ 
     /* SOURCE INTERMEDIARIO 0 */ 
-    #elif (radioID == INTERMEDIARIO0)
+    #if (radioID == INTERMEDIARIO0)
   
         if (radio.available()) { 
           receber = ReceberPacote();  
@@ -366,35 +236,8 @@ void loop() {
             EnviarPacote(enviar);
             Serial.println("<MASTER -> SENSOR3>"); 
           }        
-        } 
-
-    /* SOURCE SENSOR 0, 1, 2 ou 3 */ 
-    #elif (radioID == SENSOR0 || radioID == SENSOR1 || radioID == SENSOR2 || radioID == SENSOR3)
-
-        if (radio.available()) { 
-          receber = ReceberPacote(); 
-          String tipo = receber.tipo;
-          String dado = receber.dado;          
-          if (receber.enderecoDestino == enderecoOrigem) {
-            if (tipo == "PING") { // ENVIAR MEU PONG PARA QUEM ENVIOU PING
-              enviar.enderecoOrigem = enderecoOrigem;
-              enviar.enderecoDestino = receber.enderecoOrigem;
-              EnviarPong(enviar);
-            }
-            else
-            if (tipo == "GET") { // ENVIAR DADO PARA QUEM SOLICITOU O GET
-              enviar.enderecoOrigem = enderecoOrigem;
-              enviar.enderecoDestino = receber.enderecoOrigem;
-              strcpy(enviar.tipo,"SET");
-              strcpy(enviar.dado, int(dht.readTemperature()));
-              EnviarPacote(enviar);
-            } else Serial.println("<ERRO>"); 
-          }else Serial.println("MENSAGEM PARA OUTRO NODE");      
-        }  
-        
+        }
     #endif
-  
-  
     delay(10);
   }
 }
@@ -425,37 +268,3 @@ void EnviarPong(PKG pacote) {
   strcpy(pacote.dado,"");
   EnviarPacote(pacote);
 }
-
-
-#if (radioID == MASTER)
-
-    void MasterPing() {
-      Serial.println("Ping");
-      PKG pacote;
-
-      for (int i = 0; i < CAMADAS; i++)         // para o numero de camadas
-        for (int j = 0; j < MAIOR_NODES; j++)   // para maior quantidade de nodes em qualquer camada
-            if (ativos[i][j] > 0) 
-              ativos[i][j]--;                  
-      
-      WRITE_INTERMEDIARIO0;
-      pacote.enderecoOrigem = enderecoOrigem; 
-      pacote.enderecoDestino = INTERMEDIARIO0;
-      EnviarPing(pacote);
-      
-      WRITE_INTERMEDIARIO1;
-      pacote.enderecoOrigem = enderecoOrigem; 
-      pacote.enderecoDestino = INTERMEDIARIO1;
-      EnviarPing(pacote);
-    }
-
-
-    void AtivarNode(int ID) {
-      ativos[int(ID /10)][ID % 10] = 3; 
-    }
-
-    bool NodeAtivo(int ID) {
-      return (ativos[int(ID /10)][ID % 10] > 0 ? true : false); 
-    }
-    
-#endif
