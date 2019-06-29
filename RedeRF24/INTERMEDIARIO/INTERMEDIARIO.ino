@@ -10,6 +10,12 @@
 #define SENSOR2 22
 #define SENSOR3 23
 
+/* DEFINE O TIPO DA MENSAGEM */
+#define PING 0
+#define PONG 1 
+#define GET  2
+#define SET  3
+
 #define radioID INTERMEDIARIO0   //Informar o ID ou NOME do dispositivo
 
 /*             T  A  B  L  E        P  I  P  E  S
@@ -68,7 +74,7 @@ byte canal[][6] = {"000ch","100ch","200ch","300ch","400ch","500ch","600ch","700c
 typedef struct PKG {
   char enderecoOrigem;
   char enderecoDestino;
-  char tipo[20] = "";
+  char tipo = 0;
   char dado[20] = "";
 } PKG;
 
@@ -117,7 +123,6 @@ void setup() {
 
 }
 
-
 void loop() {
   
   PKG enviar;
@@ -130,11 +135,11 @@ void loop() {
   
         if (radio.available()) { 
           receber = ReceberPacote();  
-          String tipo = receber.tipo;
-          String dado = receber.dado;         
+          char tipo = receber.tipo;
+          String dado = receber.dado;
           if (receber.enderecoDestino == enderecoOrigem) {
-            if (tipo == "PING") {
-              Serial.println("IPING");
+            if (tipo == PING) {
+              Serial.println("PING");
               WRITE_MASTER;             // ENVIAR MEU PONG PARA O MASTER
               enviar.enderecoOrigem = enderecoOrigem;
               enviar.enderecoDestino = receber.enderecoOrigem;
@@ -143,15 +148,16 @@ void loop() {
               WRITE_SENSOR0;            // REPASSAR PING PARA OS FILHOS
               enviar.enderecoOrigem = enderecoOrigem;
               enviar.enderecoDestino = SENSOR0;
-              EnviarPing(enviar);
-
+              //EnviarPing(enviar);
+              
               WRITE_SENSOR1;            // REPASSAR PING PARA OS FILHOS
               enviar.enderecoOrigem = enderecoOrigem;
               enviar.enderecoDestino = SENSOR1;
-              EnviarPing(enviar);
+              //EnviarPing(enviar);
               
             }else
-            if (tipo == "PONG"){
+            if (tipo == PONG){
+              Serial.println("PONG");
               WRITE_MASTER;             // REPASSAR PONG PARA O MASTER 
               enviar.enderecoOrigem = receber.enderecoOrigem;
               enviar.enderecoDestino = MASTER;
@@ -187,10 +193,10 @@ void loop() {
   
         if (radio.available()) { 
           receber = ReceberPacote();     
-          String tipo = receber.tipo;
+          char tipo = receber.tipo;
           String dado = receber.dado;      
           if (receber.enderecoDestino == enderecoOrigem) {
-            if (tipo == "PING") {
+            if (tipo == PING) {
               WRITE_MASTER;             // ENVIAR MEU PONG PARA O MASTER
               enviar.enderecoOrigem = enderecoOrigem;
               enviar.enderecoDestino = receber.enderecoOrigem;
@@ -207,7 +213,7 @@ void loop() {
               EnviarPing(enviar);
               
             }else
-            if (tipo == "PONG"){
+            if (tipo == PONG){
               WRITE_MASTER;             // REPASSAR PONG PARA O MASTER 
               enviar.enderecoOrigem = receber.enderecoOrigem;
               enviar.enderecoDestino = MASTER;
@@ -244,27 +250,30 @@ void loop() {
 
 PKG ReceberPacote() {
   PKG receber;
-  radio.read( &receber, sizeof(PKG)); 
+  radio.read(&receber, sizeof(PKG)); 
   return receber;
 }
 
 bool EnviarPacote(PKG pacote) {
   bool trasmitido = false;
-  radio.stopListening();               
-  transmitido = radio.write( &pacote, sizeof(PKG) );
+  delay(50);
+  radio.stopListening();  
+  transmitido = radio.write( &pacote, sizeof(PKG));     
+  //while(!radio.write( &pacote, sizeof(PKG)))
+    //delay(20);
   radio.startListening();
-  Serial.println("foi: " + String(pacote.tipo));
   return transmitido;
 }
 
 void EnviarPing(PKG pacote) { 
-  strcpy(pacote.tipo,"PING");
+  pacote.tipo = PING;
   strcpy(pacote.dado,"");
   EnviarPacote(pacote);
 }
 
 void EnviarPong(PKG pacote) { 
-  strcpy(pacote.tipo,"PONG");
+  pacote.tipo = PONG;
   strcpy(pacote.dado,"");
   EnviarPacote(pacote);
+  Serial.println("I0 --> PONG");
 }

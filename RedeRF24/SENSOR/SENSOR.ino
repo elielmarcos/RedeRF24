@@ -3,10 +3,18 @@
 #include "DHT.h"
 
 //*************** Controle do RF ***********************
+
 #define SENSOR0 20
 #define SENSOR1 21
 #define SENSOR2 22
 #define SENSOR3 23
+
+
+//************ DEFINE DO TIPO DE MENSAGEM ***************
+#define PING 0
+#define PONG 1
+#define GET  2
+#define SET  3
 
 //*************** Configuracoes DHT ********************
 #define DHTPIN A0 // pino conectado no Arduino
@@ -75,7 +83,7 @@ byte canal[][6] = {"000ch","100ch","200ch","300ch","400ch","500ch","600ch","700c
 typedef struct PKG {
   char enderecoOrigem;
   char enderecoDestino;
-  char tipo[20] = "";
+  char tipo = 0;
   char dado[20] = "";
 } PKG;
 
@@ -100,7 +108,7 @@ void setup() {
   radio.setPALevel(RF24_PA_HIGH); // Configura RF potência máxima 
   
   #if (radioID == SENSOR0)   // SENSOR 0
-      radio.openWritingPipe(PIPE_D);
+      radio.openWritingPipe(PIPE_E);
       radio.openReadingPipe(1, PIPE_F);
       enderecoOrigem = SENSOR0;
       dht.begin();
@@ -141,19 +149,20 @@ void loop() {
 
         if (radio.available()) { 
           receber = ReceberPacote(); 
-          String tipo = receber.tipo;
+          char tipo = receber.tipo;
           String dado = receber.dado;          
           if (receber.enderecoDestino == enderecoOrigem) {
-            if (tipo == "PING") { // ENVIAR MEU PONG PARA QUEM ENVIOU PING
+            if (tipo == PING) { // ENVIAR MEU PONG PARA QUEM ENVIOU PING (INTERMEDIARIO)
+              Serial.println("S0 <-- PING");
               enviar.enderecoOrigem = enderecoOrigem;
               enviar.enderecoDestino = receber.enderecoOrigem;
               EnviarPong(enviar);
             }
             else
-            if (tipo == "GET") { // ENVIAR DADO PARA QUEM SOLICITOU O GET
+            if (tipo == GET) { // ENVIAR DADO PARA QUEM SOLICITOU O GET (INTERMEDIARIO)
               enviar.enderecoOrigem = enderecoOrigem;
               enviar.enderecoDestino = receber.enderecoOrigem;
-              strcpy(enviar.tipo,"SET");
+              enviar.tipo = SET;
               //strcpy(enviar.dado, String(dht.readTemperature()));
               strcpy(enviar.dado, "0");
               EnviarPacote(enviar);
@@ -175,22 +184,27 @@ PKG ReceberPacote() {
 }
 
 bool EnviarPacote(PKG pacote) {
-  bool trasmitido = false;
+  bool transmitido = false;
+  delay(100);
   radio.stopListening();               
-  transmitido = radio.write( &pacote, sizeof(PKG) );
+  transmitido = radio.write(&pacote, sizeof(PKG) );
   radio.startListening();
-  Serial.println("foi: " + String(pacote.tipo));
+  
+  if(pacote.tipo == PONG && transmitido){
+    Serial.println("S0 --> PONG");
+  }
+  
   return transmitido;
 }
 
 void EnviarPing(PKG pacote) { 
-  strcpy(pacote.tipo,"PING");
+  pacote.tipo = PING;
   strcpy(pacote.dado,"");
   EnviarPacote(pacote);
 }
 
 void EnviarPong(PKG pacote) { 
-  strcpy(pacote.tipo,"PONG");
+  pacote.tipo = PONG;
   strcpy(pacote.dado,"");
   EnviarPacote(pacote);
 }
