@@ -1,6 +1,6 @@
 #include <RF24.h>
 #include "DHT.h"
-#include <LM35.h>
+//#include <LM35.h>
 /*
  *            ARQUITETURA DA REDE
  *               
@@ -36,7 +36,7 @@ DHT dht(DHTPIN, DHTTYPE);
 // Conecte pino 1 do sensor (esquerda) ao +5V
 // Conecte pino 2 do sensor ao pino de dados definido em seu Arduino
 // Conecte pino 3 do sensor ao GND
-LM35 sensor(A0);
+//LM35 sensor(A0);
 
 RF24 radio(7,8);
 
@@ -155,9 +155,9 @@ void loop() {
     }
     
     radio.stopListening();
-    while (!transmitido) {
+    if (!transmitido) {
         transmitido = radio.write(&enviar, sizeof(MSG));
-        delay(100);
+        //delay(100);
     }
     radio.startListening();
         

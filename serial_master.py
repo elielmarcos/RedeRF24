@@ -38,7 +38,7 @@ plt.scatter(-1, 0, c="r", s=10, label="sensor_2")
 plt.legend()
 
 # configura serial
-master = serial.Serial('COM6', 115200)
+master = serial.Serial('COM11', 115200)
 
 # le serial
 line = ""
